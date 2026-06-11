@@ -1,1 +1,12 @@
-{"name":"@studymarket/payment-service","version":"0.1.0","private":true,"dependencies":{"fastify":"^5.8.5","stripe":"^22.2.0"}}
+{
+    "name": "@studymarket/payment-service",
+    "version": "0.1.0",
+    "private": true,
+    "dependencies": {
+        "fastify": "^5.8.5",
+        "stripe": "^22.2.0"
+    },
+    "scripts": {
+        "typecheck": "tsc --noEmit"
+    }
+}

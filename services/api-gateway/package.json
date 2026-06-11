@@ -1,1 +1,13 @@
-{"name":"@studymarket/api-gateway","version":"0.1.0","private":true,"dependencies":{"cors":"^2.8.6","express":"^5.2.1","helmet":"^8.2.0"}}
+{
+    "name": "@studymarket/api-gateway",
+    "version": "0.1.0",
+    "private": true,
+    "dependencies": {
+        "cors": "^2.8.6",
+        "express": "^5.2.1",
+        "helmet": "^8.2.0"
+    },
+    "scripts": {
+        "typecheck": "tsc --noEmit"
+    }
+}

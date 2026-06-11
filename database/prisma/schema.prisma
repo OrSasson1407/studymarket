@@ -1,0 +1,110 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------------------------
+// 1. Academic Taxonomy
+// -----------------------------------------
+model University {
+  id              String   @id @default(uuid())
+  domain          String   @unique
+  name            String
+  countryCode     String
+  region          String
+  isAlumniEnabled Boolean  @default(false)
+  
+  users           User[]
+  faculties       Faculty[]
+}
+
+model Faculty {
+  id           String      @id @default(uuid())
+  universityId String
+  name         String
+  slug         String      @unique
+  
+  university   University  @relation(fields: [universityId], references: [id])
+  courses      LocalCourse[]
+}
+
+model LocalCourse {
+  id              String   @id @default(uuid())
+  facultyId       String
+  courseCode      String
+  name            String
+  semesterOffered String   // 'FALL' | 'SPRING' | 'SUMMER' | 'ALL'
+  year            Int
+  
+  faculty         Faculty  @relation(fields: [facultyId], references: [id])
+  documents       ContentAsset[]
+}
+
+// -----------------------------------------
+// 2. Identity & Trust
+// -----------------------------------------
+model User {
+  id                 String   @id @default(uuid())
+  email              String   @unique
+  firstName          String
+  lastName           String
+  universityId       String?
+  verificationStatus String   @default("UNVERIFIED") // UNVERIFIED, PENDING_EMAIL, VERIFIED
+  
+  university         University? @relation(fields: [universityId], references: [id])
+  sellerProfile      SellerProfile?
+  
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model SellerProfile {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  kycStatus        String   @default("NOT_STARTED")
+  stripeAccountId  String?  @unique
+  
+  availableBalance Int      @default(0) // Stored in lowest denominator (agorot/cents)
+  lifetimeEarnings Int      @default(0)
+  
+  level            Int      @default(1)
+  xpPoints         Int      @default(0)
+  overallRating    Float    @default(0.0)
+  
+  user             User     @relation(fields: [userId], references: [id])
+  assets           ContentAsset[]
+}
+
+// -----------------------------------------
+// 3. Content Marketplace
+// -----------------------------------------
+model ContentAsset {
+  id             String   @id @default(uuid())
+  sellerId       String
+  localCourseId  String
+  title          String
+  description    String
+  format         String   // PDF, ZIP, FLASHCARDS
+  status         String   @default("DRAFT") // DRAFT, SCANNING, LIVE, DELISTED
+  
+  fileUrl        String
+  previewUrl     String?
+  pageCount      Int      @default(1)
+  
+  priceAmount    Int      // Lowest denominator
+  currency       String   @default("ILS")
+  
+  viewCount      Int      @default(0)
+  purchaseCount  Int      @default(0)
+  compositeRating Float   @default(0.0)
+  
+  seller         SellerProfile @relation(fields: [sellerId], references: [id])
+  course         LocalCourse   @relation(fields: [localCourseId], references: [id])
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
