@@ -1,0 +1,1 @@
+{"name":"@studymarket/user-service","version":"0.1.0","private":true,"dependencies":{"fastify":"^5.8.5","pg":"^8.21.0"}}

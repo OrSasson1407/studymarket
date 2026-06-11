@@ -1,0 +1,1 @@
+{"name":"@studymarket/auth-service","version":"0.1.0","private":true,"dependencies":{"@fastify/cors":"^11.2.0","@fastify/jwt":"^10.1.0","fastify":"^5.8.5"}}

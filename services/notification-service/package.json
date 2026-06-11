@@ -1,0 +1,1 @@
+{"name":"@studymarket/notification-service","version":"0.1.0","private":true,"dependencies":{"@sendgrid/mail":"^8.1.6","fastify":"^5.8.5","firebase-admin":"^14.0.0"}}
