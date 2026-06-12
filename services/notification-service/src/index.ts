@@ -2,23 +2,30 @@ import Fastify from 'fastify';
 import sgMail from '@sendgrid/mail';
 
 sgMail.setApiKey(process.env.SENDGRID_API_KEY ?? '');
+const FROM_EMAIL      = process.env.FROM_EMAIL      ?? 'noreply@studymarket.io';
+const INTERNAL_SECRET = process.env.INTERNAL_SECRET ?? 'internal-secret-local';
 
-const FROM_EMAIL = process.env.FROM_EMAIL ?? 'noreply@studymarket.io';
-const server     = Fastify({ logger: true });
+const server = Fastify({ logger: true });
+
+// Internal-only guard â€” services call this with X-Internal-Secret header
+async function requireInternal(req: any, reply: any) {
+  if (req.headers['x-internal-secret'] !== INTERNAL_SECRET) {
+    return reply.status(403).send({ error: 'Forbidden' });
+  }
+}
 
 type EmailPayload = { to: string; subject: string; html: string };
-
 async function sendEmail(payload: EmailPayload) {
   if (!process.env.SENDGRID_API_KEY) {
-    console.warn('[notifications] SENDGRID_API_KEY not set — email skipped:', payload.subject);
+    console.warn('[notifications] SENDGRID_API_KEY not set â€” email skipped:', payload.subject);
     return;
   }
   await sgMail.send({ from: FROM_EMAIL, ...payload });
 }
 
-// ?? POST /api/notifications/email/verify ?????????????????????????????????????
 server.post<{ Body: { to: string; verificationUrl: string } }>(
   '/api/notifications/email/verify',
+  { preHandler: requireInternal },
   async (req, reply) => {
     const { to, verificationUrl } = req.body;
     await sendEmail({
@@ -37,9 +44,9 @@ server.post<{ Body: { to: string; verificationUrl: string } }>(
   }
 );
 
-// ?? POST /api/notifications/email/purchase ????????????????????????????????????
 server.post<{ Body: { to: string; buyerName: string; docTitle: string; downloadUrl: string } }>(
   '/api/notifications/email/purchase',
+  { preHandler: requireInternal },
   async (req, reply) => {
     const { to, buyerName, docTitle, downloadUrl } = req.body;
     await sendEmail({
@@ -51,19 +58,19 @@ server.post<{ Body: { to: string; buyerName: string; docTitle: string; downloadU
         <a href="${downloadUrl}" style="background:#1C6E8F;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;margin:16px 0;">
           Download Now
         </a>
-        <p style="color:#78716c;font-size:12px;">Secure link — expires in 72 hours.</p>
+        <p style="color:#78716c;font-size:12px;">Secure link â€” expires in 72 hours.</p>
       `,
     });
     return reply.send({ sent: true });
   }
 );
 
-// ?? POST /api/notifications/email/price-drop ?????????????????????????????????
 server.post<{ Body: { to: string; docTitle: string; oldPrice: number; newPrice: number; currency: string } }>(
   '/api/notifications/email/price-drop',
+  { preHandler: requireInternal },
   async (req, reply) => {
     const { to, docTitle, oldPrice, newPrice, currency } = req.body;
-    const symbol = currency === 'ILS' ? '¤' : '$';
+    const symbol = currency === 'ILS' ? 'â‚ª' : '$';
     await sendEmail({
       to,
       subject: `Price drop alert: ${docTitle}`,

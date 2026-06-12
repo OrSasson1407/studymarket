@@ -17,18 +17,16 @@ model University {
   countryCode     String
   region          String
   isAlumniEnabled Boolean  @default(false)
-  
   users           User[]
   faculties       Faculty[]
 }
 
 model Faculty {
-  id           String      @id @default(uuid())
+  id           String       @id @default(uuid())
   universityId String
   name         String
-  slug         String      @unique
-  
-  university   University  @relation(fields: [universityId], references: [id])
+  slug         String       @unique
+  university   University   @relation(fields: [universityId], references: [id])
   courses      LocalCourse[]
 }
 
@@ -37,9 +35,8 @@ model LocalCourse {
   facultyId       String
   courseCode      String
   name            String
-  semesterOffered String   // 'FALL' | 'SPRING' | 'SUMMER' | 'ALL'
+  semesterOffered String
   year            Int
-  
   faculty         Faculty  @relation(fields: [facultyId], references: [id])
   documents       ContentAsset[]
 }
@@ -50,14 +47,16 @@ model LocalCourse {
 model User {
   id                 String   @id @default(uuid())
   email              String   @unique
+  passwordHash       String
   firstName          String
   lastName           String
   universityId       String?
-  verificationStatus String   @default("UNVERIFIED") // UNVERIFIED, PENDING_EMAIL, VERIFIED
-  
-  university         University? @relation(fields: [universityId], references: [id])
+  verificationStatus String   @default("UNVERIFIED")
+  mfaEnabled         Boolean  @default(false)
+  lastLoginIp        String?
+  university         University?   @relation(fields: [universityId], references: [id])
   sellerProfile      SellerProfile?
-  
+  transactions       PaymentTransaction[] @relation("BuyerTransactions")
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 }
@@ -67,44 +66,79 @@ model SellerProfile {
   userId           String   @unique
   kycStatus        String   @default("NOT_STARTED")
   stripeAccountId  String?  @unique
-  
-  availableBalance Int      @default(0) // Stored in lowest denominator (agorot/cents)
+  availableBalance Int      @default(0)
+  pendingBalance   Int      @default(0)
   lifetimeEarnings Int      @default(0)
-  
   level            Int      @default(1)
   xpPoints         Int      @default(0)
+  badges           String[] @default([])
   overallRating    Float    @default(0.0)
-  
   user             User     @relation(fields: [userId], references: [id])
   assets           ContentAsset[]
+  transactions     PaymentTransaction[] @relation("SellerTransactions")
 }
 
 // -----------------------------------------
 // 3. Content Marketplace
 // -----------------------------------------
 model ContentAsset {
-  id             String   @id @default(uuid())
-  sellerId       String
-  localCourseId  String
-  title          String
-  description    String
-  format         String   // PDF, ZIP, FLASHCARDS
-  status         String   @default("DRAFT") // DRAFT, SCANNING, LIVE, DELISTED
-  
-  fileUrl        String
-  previewUrl     String?
-  pageCount      Int      @default(1)
-  
-  priceAmount    Int      // Lowest denominator
-  currency       String   @default("ILS")
-  
-  viewCount      Int      @default(0)
-  purchaseCount  Int      @default(0)
-  compositeRating Float   @default(0.0)
-  
-  seller         SellerProfile @relation(fields: [sellerId], references: [id])
-  course         LocalCourse   @relation(fields: [localCourseId], references: [id])
-  
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                     String   @id @default(uuid())
+  sellerId               String
+  localCourseId          String
+  title                  String
+  description            String
+  format                 String
+  status                 String   @default("DRAFT")
+  fileUrl                String
+  previewUrl             String?
+  pageCount              Int      @default(1)
+  priceAmount            Int
+  currency               String   @default("ILS")
+  isSubscriptionEligible Boolean  @default(false)
+  viewCount              Int      @default(0)
+  purchaseCount          Int      @default(0)
+  compositeRating        Float    @default(0.0)
+  seller                 SellerProfile @relation(fields: [sellerId], references: [id])
+  course                 LocalCourse   @relation(fields: [localCourseId], references: [id])
+  transactions           PaymentTransaction[]
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+}
+
+// -----------------------------------------
+// 4. Payments & Transactions
+// -----------------------------------------
+model PaymentTransaction {
+  id               String   @id @default(uuid())
+  buyerId          String
+  sellerId         String?
+  contentId        String?
+  grossAmount      Int
+  platformFee      Int
+  sellerCut        Int
+  currency         String
+  method           String
+  status           String   @default("PENDING")
+  providerChargeId String?
+  buyer            User          @relation("BuyerTransactions", fields: [buyerId], references: [id])
+  seller           SellerProfile? @relation("SellerTransactions", fields: [sellerId], references: [id])
+  content          ContentAsset?  @relation(fields: [contentId], references: [id])
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+// -----------------------------------------
+// 5. Subscriptions
+// -----------------------------------------
+model SubscriptionAccess {
+  id                     String   @id @default(uuid())
+  userId                 String
+  tier                   String
+  status                 String   @default("ACTIVE")
+  providerSubscriptionId String?
+  currentPeriodStart     DateTime
+  currentPeriodEnd       DateTime
+  cancelAtPeriodEnd      Boolean  @default(false)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 }

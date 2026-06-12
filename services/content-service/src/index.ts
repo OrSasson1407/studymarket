@@ -1,14 +1,14 @@
-import Fastify from 'fastify';
+ï»¿import Fastify from 'fastify';
 import { prisma } from '../../../database';
+import { requireAuth } from '../../shared/src/jwtMiddleware';
 
 const server = Fastify({ logger: true });
 
-// ?? GET /api/documents ????????????????????????????????????????????????????????
+// Public: list documents
 server.get<{
   Querystring: { search?: string; university?: string; docType?: string; limit?: string; offset?: string }
-}>('/api/documents', async (req, reply) => {
+}>('/api/content/documents', async (req, reply) => {
   const { search, university, limit = '20', offset = '0' } = req.query;
-
   const assets = await prisma.contentAsset.findMany({
     where: {
       status: 'LIVE',
@@ -32,30 +32,28 @@ server.get<{
     skip:  parseInt(offset, 10),
     orderBy: { createdAt: 'desc' },
   });
-
   const docs = assets.map(a => ({
-    id:             a.id,
-    title:          a.title,
-    courseCode:     a.course.courseCode,
-    courseName:     a.course.name,
-    university:     a.course.faculty.university.name,
-    faculty:        a.course.faculty.name,
-    semester:       a.course.semesterOffered,
-    priceAmount:    a.priceAmount,
-    currency:       a.currency,
+    id:              a.id,
+    title:           a.title,
+    courseCode:      a.course.courseCode,
+    courseName:      a.course.name,
+    university:      a.course.faculty.university.name,
+    faculty:         a.course.faculty.name,
+    semester:        a.course.semesterOffered,
+    priceAmount:     a.priceAmount,
+    currency:        a.currency,
     compositeRating: a.compositeRating,
-    purchaseCount:  a.purchaseCount,
-    authorName:     a.seller.user.firstName + ' ' + a.seller.user.lastName,
-    authorVerified: a.seller.user.verificationStatus === 'VERIFIED',
-    docType:        a.format,
-    createdAt:      a.createdAt,
+    purchaseCount:   a.purchaseCount,
+    authorName:      a.seller.user.firstName + ' ' + a.seller.user.lastName,
+    authorVerified:  a.seller.user.verificationStatus === 'VERIFIED',
+    docType:         a.format,
+    createdAt:       a.createdAt,
   }));
-
   return reply.send(docs);
 });
 
-// ?? GET /api/documents/:id ????????????????????????????????????????????????????
-server.get<{ Params: { id: string } }>('/api/documents/:id', async (req, reply) => {
+// Public: get single document
+server.get<{ Params: { id: string } }>('/api/content/documents/:id', async (req, reply) => {
   const asset = await prisma.contentAsset.findUnique({
     where: { id: req.params.id },
     include: {
@@ -64,46 +62,40 @@ server.get<{ Params: { id: string } }>('/api/documents/:id', async (req, reply) 
     },
   });
   if (!asset || asset.status !== 'LIVE') return reply.status(404).send({ error: 'Document not found' });
-
-  // Increment view count (fire-and-forget)
   prisma.contentAsset.update({ where: { id: asset.id }, data: { viewCount: { increment: 1 } } }).catch(() => {});
-
   return reply.send(asset);
 });
 
-// ?? POST /api/documents/:id/purchase ?????????????????????????????????????????
-// NOTE: Real payment is handled by payment-service. This endpoint records the purchase intent.
+// Protected: purchase intent
 server.post<{ Params: { id: string }; Body: { buyerId: string } }>(
-  '/api/documents/:id/purchase',
+  '/api/content/documents/:id/purchase',
+  { preHandler: requireAuth },
   async (req, reply) => {
     const asset = await prisma.contentAsset.findUnique({ where: { id: req.params.id } });
     if (!asset || asset.status !== 'LIVE') return reply.status(404).send({ error: 'Document not found' });
-
-    await prisma.contentAsset.update({
-      where: { id: asset.id },
-      data:  { purchaseCount: { increment: 1 } },
-    });
-
+    await prisma.contentAsset.update({ where: { id: asset.id }, data: { purchaseCount: { increment: 1 } } });
     return reply.status(201).send({ success: true, assetId: asset.id, fileUrl: asset.fileUrl });
   }
 );
 
-// ?? POST /api/documents — upload new asset (draft) ????????????????????????????
+// Protected: upload new asset
 server.post<{
   Body: {
     sellerId: string; localCourseId: string; title: string;
     description: string; format: string; priceAmount: number;
     currency?: string; fileUrl: string; previewUrl?: string; pageCount?: number;
   }
-}>('/api/documents', async (req, reply) => {
-  const { sellerId, localCourseId, title, description, format, priceAmount, currency = 'ILS', fileUrl, previewUrl, pageCount = 1 } = req.body;
-
-  const asset = await prisma.contentAsset.create({
-    data: { sellerId, localCourseId, title, description, format, priceAmount, currency, fileUrl, previewUrl, pageCount, status: 'DRAFT' },
-  });
-
-  return reply.status(201).send(asset);
-});
+}>(
+  '/api/content/documents',
+  { preHandler: requireAuth },
+  async (req, reply) => {
+    const { sellerId, localCourseId, title, description, format, priceAmount, currency = 'ILS', fileUrl, previewUrl, pageCount = 1 } = req.body;
+    const asset = await prisma.contentAsset.create({
+      data: { sellerId, localCourseId, title, description, format, priceAmount, currency, fileUrl, previewUrl, pageCount, status: 'DRAFT' },
+    });
+    return reply.status(201).send(asset);
+  }
+);
 
 server.get('/health', async () => ({ status: 'ok', service: 'content-service' }));
 

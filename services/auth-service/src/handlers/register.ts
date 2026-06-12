@@ -1,18 +1,25 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { getUniversityByEmail } from '@studymarket/utils';
+import bcrypt from 'bcryptjs';
+import { prisma } from '../../../../database';
 
 export async function registerHandler(request: FastifyRequest, reply: FastifyReply) {
-  const { email, name, password } = request.body as any;
+  const { email, password, firstName, lastName, universityId } = request.body as {
+    email: string; password: string; firstName: string; lastName: string; universityId?: string;
+  };
 
-  const university = getUniversityByEmail(email);
-  if (!university) {
-    return reply.status(403).send({ error: 'Invalid institutional email.' });
-  }
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) return reply.status(409).send({ error: 'Email already registered' });
 
-  // TODO: Hash password, save user to DB, generate verification token
-  
+  const passwordHash = await bcrypt.hash(password, 12);
+
+  const user = await prisma.user.create({
+    data: { email, passwordHash, firstName, lastName, universityId },
+  });
+
   return reply.status(201).send({
-    message: 'User registered. Please check your email to verify your account.',
-    requiresVerification: true
+    id:        user.id,
+    email:     user.email,
+    firstName: user.firstName,
+    lastName:  user.lastName,
   });
 }

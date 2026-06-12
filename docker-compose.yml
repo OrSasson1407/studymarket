@@ -1,12 +1,22 @@
 version: '3.8'
 
+x-node-env: &node-env
+  DATABASE_URL:            postgresql://root:rootpassword@postgres:5432/studymarket_dev?schema=public
+  REDIS_URL:               redis://redis:6379
+  ELASTICSEARCH_URL:       http://elasticsearch:9200
+  JWT_SECRET:              super-secret-local-key
+  COOKIE_SECRET:           cookie-signature-secret
+  INTERNAL_SECRET:         internal-secret-local
+  NODE_ENV:                development
+
 services:
+  # ── Infrastructure ──────────────────────────────────────────────────────────
   postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_USER: root
+      POSTGRES_USER:     root
       POSTGRES_PASSWORD: rootpassword
-      POSTGRES_DB: studymarket_dev
+      POSTGRES_DB:       studymarket_dev
     ports:
       - "5437:5432"
     volumes:
@@ -34,6 +44,123 @@ services:
       - "9200:9200"
     volumes:
       - es_data:/usr/share/elasticsearch/data
+
+  # ── Node Services ────────────────────────────────────────────────────────────
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    ports:
+      - "3100:3100"
+    environment:
+      <<: *node-env
+      GATEWAY_PORT:            3100
+      AUTH_SERVICE_URL:        http://auth-service:3001
+      CONTENT_SERVICE_URL:     http://content-service:3002
+      USER_SERVICE_URL:        http://user-service:3003
+      PAYMENT_SERVICE_URL:     http://payment-service:3004
+      SEARCH_SERVICE_URL:      http://search-service:3005
+    depends_on:
+      - redis
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      <<: *node-env
+      PORT: 3001
+      NOTIFICATION_SERVICE_URL: http://notification-service:3006
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  content-service:
+    build:
+      context: .
+      dockerfile: services/content-service/Dockerfile
+    ports:
+      - "3002:3002"
+    environment:
+      <<: *node-env
+      PORT: 3002
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  user-service:
+    build:
+      context: .
+      dockerfile: services/user-service/Dockerfile
+    ports:
+      - "3003:3003"
+    environment:
+      <<: *node-env
+      PORT: 3003
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: services/payment-service/Dockerfile
+    ports:
+      - "3004:3004"
+    environment:
+      <<: *node-env
+      PORT:                    3004
+      STRIPE_SECRET_KEY:       sk_test_placeholder
+      STRIPE_WEBHOOK_SECRET:   whsec_placeholder
+      NOTIFICATION_SERVICE_URL: http://notification-service:3006
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  search-service:
+    build:
+      context: .
+      dockerfile: services/search-service/Dockerfile
+    ports:
+      - "3005:3005"
+    environment:
+      <<: *node-env
+      PORT: 3005
+    depends_on:
+      - elasticsearch
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    ports:
+      - "3006:3006"
+    environment:
+      <<: *node-env
+      PORT:             3006
+      SENDGRID_API_KEY: ""
+      FROM_EMAIL:       noreply@studymarket.io
+
+  # ── Python Analytics ─────────────────────────────────────────────────────────
+  analytics-service:
+    build:
+      context: services/analytics-service
+      dockerfile: Dockerfile
+    ports:
+      - "3007:3007"
+    environment:
+      DATABASE_URL:    postgresql://root:rootpassword@postgres:5432/studymarket_dev
+      REDIS_URL:       redis://redis:6379
+      INTERNAL_SECRET: internal-secret-local
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
 volumes:
   postgres_data:
