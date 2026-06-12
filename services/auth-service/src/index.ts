@@ -1,4 +1,4 @@
-import Fastify from 'fastify';
+﻿import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
 import cookie from '@fastify/cookie';
@@ -7,6 +7,7 @@ import rateLimit from '@fastify/rate-limit';
 import { registerHandler } from './handlers/register';
 import { loginHandler } from './handlers/login';
 import { generateMfaHandler } from './handlers/mfa';
+import { checkDomainHandler } from './handlers/checkDomain';
 
 const server = Fastify({ logger: true });
 
@@ -27,10 +28,14 @@ async function buildServer() {
     publicRoutes.post('/api/auth/register', {
       config: { rateLimit: { max: 5, timeWindow: '1 minute' } }
     }, registerHandler);
-    
+
     publicRoutes.post('/api/auth/login', {
       config: { rateLimit: { max: 10, timeWindow: '1 minute' } }
     }, loginHandler);
+
+    publicRoutes.get('/api/auth/check-domain', {
+      config: { rateLimit: { max: 30, timeWindow: '1 minute' } }
+    }, checkDomainHandler);
   });
 
   // 4. Protected Routes (Requires Auth - Mocked for now)
@@ -47,7 +52,6 @@ buildServer().then(() => {
       server.log.error(err);
       process.exit(1);
     }
-    // Using standard string concatenation to prevent PowerShell backtick mangling
     console.log('Auth service listening at ' + address);
   });
 });

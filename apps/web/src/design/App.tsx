@@ -1,5 +1,6 @@
 ﻿import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { checkEmailDomain, registerUser } from '../../lib/api-client';
 import { 
   Building, 
   FolderOpen, 
@@ -461,7 +462,9 @@ export default function App() {
   const [isVerifyingEmail, setIsVerifyingEmail] = useState(false);
   const [kycFullName, setKycFullName] = useState('Daniel Alon');
   const [kycIdNumber, setKycIdNumber] = useState('328492049');
-  const [kycStatus, setKycStatus] = useState<'unsubmitted' | 'processing' | 'approved'>('unsubmitted');
+  const [kycPassword, setKycPassword] = useState('StudyMarket123!');
+  const [registrationError, setRegistrationError] = useState<string | null>(null);
+  const [kycStatus, setKycStatus] = useState<'unsubmitted' | 'processing' | 'approved' | 'failed'>('unsubmitted');
   const [behaviorLogs, setBehaviorLogs] = useState<string[]>(['System init: behavioral monitoring engine loaded.', 'Anomaly scan: 0 rapid payouts flagged.', 'Spam check: Tau lecture guide verified under threshold.']);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   const [followedDocIds, setFollowedDocIds] = useState<string[]>([]);
@@ -565,7 +568,8 @@ export default function App() {
   const handleEmailVerificationTest = (emailVal: string) => {
     setTestEmail(emailVal);
     setIsVerifyingEmail(true);
-    setTimeout(() => {
+
+    const fallback = () => {
       const parsed = emailVal.toLowerCase().trim();
       const parts = parsed.split('@');
       if (parts.length === 2) {
@@ -578,7 +582,24 @@ export default function App() {
         else { setDetectedInstitution({ domain, institutionName: 'External/Generic Email Domain', country: 'UNKNOWN', shortCode: 'GENERIC', iconAccent: '#999', verified: false }); setIsEmailVerified(false); }
       } else { setDetectedInstitution(null); setIsEmailVerified(false); }
       setIsVerifyingEmail(false);
-    }, 550);
+    };
+
+    const parsed = emailVal.toLowerCase().trim();
+    if (parsed.split('@').length !== 2) {
+      setDetectedInstitution(null);
+      setIsEmailVerified(false);
+      setIsVerifyingEmail(false);
+      return;
+    }
+
+    checkEmailDomain(parsed)
+      .then((route) => {
+        if (!route) { fallback(); return; }
+        setDetectedInstitution(route);
+        setIsEmailVerified(route.verified);
+        setIsVerifyingEmail(false);
+      })
+      .catch(() => fallback());
   };
 
   const executeSimulatedPurchase = (doc: DocumentItem) => {
@@ -920,9 +941,29 @@ export default function App() {
                 <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 bg-[#F8FAFE] p-4 rounded-xl border border-[#e2edf7]">
                   <div><label className="text-[10px] font-mono text-stone-400 uppercase">Legal Full Name</label><input type="text" value={kycFullName} onChange={(e) => setKycFullName(e.target.value)} className="w-full bg-white border p-1 rounded text-xs mt-0.5 focus:outline-[#1C6E8F]" /></div>
                   <div><label className="text-[10px] font-mono text-stone-400 uppercase">Government ID Suffix/Number</label><input type="text" value={kycIdNumber} onChange={(e) => setKycIdNumber(e.target.value)} className="w-full bg-white border p-1 rounded text-xs mt-0.5 focus:outline-[#1C6E8F]" /></div>
+                  <div><label className="text-[10px] font-mono text-stone-400 uppercase">Account Password</label><input type="password" value={kycPassword} onChange={(e) => setKycPassword(e.target.value)} className="w-full bg-white border p-1 rounded text-xs mt-0.5 focus:outline-[#1C6E8F]" /></div>
+                  {registrationError && <div className="sm:col-span-2 text-[11px] text-red-600 font-mono bg-red-50 border border-red-200 rounded-lg px-2 py-1">{registrationError}</div>}
                   <div className="sm:col-span-2 pt-2 flex justify-between items-center">
                     <div className="flex items-center gap-1.5 text-xs text-stone-500"><ShieldCheck className="w-4 h-4 text-[#1C6E8F]" /><span>ID files are stored with end-to-end sandbox AES-256 encryption.</span></div>
-                    <button type="button" onClick={() => { setKycStatus('processing'); setTimeout(() => { setKycStatus('approved'); setBehaviorLogs(prev => [`[KYC SUCCESS] Approved KYC verification for ${kycFullName}`, ...prev]); }, 1500); }} className="bg-[#1c6e8f] text-white font-bold px-4 py-1.5 rounded-lg text-xs hover:bg-[#0c3b4f] transition-all">{kycStatus === 'unsubmitted' && 'Submit Verification ID'}{kycStatus === 'processing' && 'Processing encrypted data...'}{kycStatus === 'approved' && 'KYC Approved Successfully ✓'}</button>
+                    <button type="button" onClick={() => {
+                      setKycStatus('processing');
+                      setRegistrationError(null);
+                      registerUser({ email: testEmail, name: kycFullName, password: kycPassword })
+                        .then(({ status, data }) => {
+                          if (status === 201) {
+                            setKycStatus('approved');
+                            setBehaviorLogs(prev => [`[KYC SUCCESS] ${data.message || 'Approved KYC verification for ' + kycFullName}`, ...prev]);
+                          } else {
+                            setKycStatus('failed');
+                            setRegistrationError(data.error || 'Registration failed.');
+                            setBehaviorLogs(prev => [`[KYC REJECTED] ${data.error || 'Unknown error'} (${testEmail})`, ...prev]);
+                          }
+                        })
+                        .catch(() => {
+                          setKycStatus('failed');
+                          setRegistrationError('Could not reach auth-service. Is it running?');
+                        });
+                    }} className="bg-[#1c6e8f] text-white font-bold px-4 py-1.5 rounded-lg text-xs hover:bg-[#0c3b4f] transition-all">{kycStatus === 'unsubmitted' && 'Submit Verification ID'}{kycStatus === 'processing' && 'Processing encrypted data...'}{kycStatus === 'approved' && 'KYC Approved Successfully ✓'}{kycStatus === 'failed' && 'Retry Submission'}</button>
                   </div>
                 </div>
               </div>

@@ -12,7 +12,11 @@
         "fastify": "^5.8.5",
         "otplib": "^13.4.1"
     },
+    "devDependencies": {
+        "tsx": "^4.19.0"
+    },
     "scripts": {
+        "dev": "tsx watch src/index.ts",
         "typecheck": "tsc --noEmit"
     }
 }
