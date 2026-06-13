@@ -61,6 +61,15 @@ server.post<{ Params: { id: string } }>(
 
 server.get('/health', async () => ({ status: 'ok', service: 'user-service' }));
 
+
+// ?? Graceful shutdown ??????????????????????????????????????????????????????????
+async function shutdown(signal: string) {
+  server.log.info(${signal} received — shutting down user-service);
+  await server.close();
+  process.exit(0);
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT",  () => shutdown("SIGINT"));
 const PORT = parseInt(process.env.PORT ?? '3003', 10);
 server.listen({ port: PORT, host: '0.0.0.0' }, (err, address) => {
   if (err) { server.log.error(err); process.exit(1); }

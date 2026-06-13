@@ -86,6 +86,15 @@ server.post<{ Body: { to: string; docTitle: string; oldPrice: number; newPrice: 
 
 server.get('/health', async () => ({ status: 'ok', service: 'notification-service' }));
 
+
+// ?? Graceful shutdown ??????????????????????????????????????????????????????????
+async function shutdown(signal: string) {
+  server.log.info(${signal} received — shutting down notification-service);
+  await server.close();
+  process.exit(0);
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT",  () => shutdown("SIGINT"));
 const PORT = parseInt(process.env.PORT ?? '3006', 10);
 server.listen({ port: PORT, host: '0.0.0.0' }, (err, address) => {
   if (err) { server.log.error(err); process.exit(1); }

@@ -1,7 +1,7 @@
 version: '3.8'
 
 x-node-env: &node-env
-  DATABASE_URL:            postgresql://root:rootpassword@postgres:5432/studymarket_dev?schema=public
+  DATABASE_URL:            postgresql://root:rootpassword@postgres:5432/studymarket_dev?schema=public&connection_limit=10&pool_timeout=20
   REDIS_URL:               redis://redis:6379
   ELASTICSEARCH_URL:       http://elasticsearch:9200
   JWT_SECRET:              super-secret-local-key
@@ -59,7 +59,10 @@ services:
       CONTENT_SERVICE_URL:     http://content-service:3002
       USER_SERVICE_URL:        http://user-service:3003
       PAYMENT_SERVICE_URL:     http://payment-service:3004
-      SEARCH_SERVICE_URL:      http://search-service:3005
+      SEARCH_SERVICE_URL:       http://search-service:3005
+      MODERATION_SERVICE_URL:   http://moderation-service:3007
+      SUBSCRIPTION_SERVICE_URL: http://subscription-service:3008
+      REVIEW_SERVICE_URL:        http://review-service:3009
     depends_on:
       - redis
 
@@ -166,3 +169,6 @@ volumes:
   postgres_data:
   redis_data:
   es_data:
+
+
+

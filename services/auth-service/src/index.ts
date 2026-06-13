@@ -1,57 +1,96 @@
-ï»¿import Fastify from 'fastify';
-import cors from '@fastify/cors';
-import jwt from '@fastify/jwt';
-import cookie from '@fastify/cookie';
-import rateLimit from '@fastify/rate-limit';
+import Fastify from "fastify";
+import cors from "@fastify/cors";
+import jwt from "@fastify/jwt";
+import cookie from "@fastify/cookie";
+import rateLimit from "@fastify/rate-limit";
 
-import { registerHandler } from './handlers/register';
-import { loginHandler } from './handlers/login';
-import { generateMfaHandler } from './handlers/mfa';
-import { checkDomainHandler } from './handlers/checkDomain';
+import { registerHandler }    from "./handlers/register";
+import { loginHandler }       from "./handlers/login";
+import { refreshHandler }     from "./handlers/refresh";
+import { logoutHandler }      from "./handlers/logout";
+import { generateMfaHandler } from "./handlers/mfa";
+import { checkDomainHandler } from "./handlers/checkDomain";
 
-const server = Fastify({ logger: true });
+const server = Fastify({ logger: { level: process.env.LOG_LEVEL ?? "info" } });
+
+// ?? Validation schemas ????????????????????????????????????????????????????????
+const registerSchema = {
+  body: {
+    type: "object",
+    required: ["email", "password", "firstName", "lastName"],
+    properties: {
+      email:        { type: "string", format: "email", maxLength: 254 },
+      password:     { type: "string", minLength: 8, maxLength: 128 },
+      firstName:    { type: "string", minLength: 1, maxLength: 80 },
+      lastName:     { type: "string", minLength: 1, maxLength: 80 },
+      universityId: { type: "string" },
+    },
+    additionalProperties: false,
+  },
+};
+
+const loginSchema = {
+  body: {
+    type: "object",
+    required: ["email", "password"],
+    properties: {
+      email:    { type: "string", format: "email" },
+      password: { type: "string", minLength: 1 },
+    },
+    additionalProperties: false,
+  },
+};
 
 async function buildServer() {
-  // 1. Security Plugins
   await server.register(cors, { origin: true, credentials: true });
-  await server.register(rateLimit, {
-    max: 100, // Limit each IP to 100 requests per `timeWindow`
-    timeWindow: '1 minute'
-  });
+  await server.register(rateLimit, { max: 100, timeWindow: "1 minute" });
+  await server.register(jwt, { secret: process.env.JWT_SECRET || "super-secret-local-key" });
+  await server.register(cookie, { secret: process.env.COOKIE_SECRET || "cookie-signature-secret" });
 
-  // 2. Auth Plugins
-  await server.register(jwt, { secret: process.env.JWT_SECRET || 'super-secret-local-key' });
-  await server.register(cookie, { secret: process.env.COOKIE_SECRET || 'cookie-signature-secret' });
-
-  // 3. Public Routes (Strict Rate Limiting)
-  server.register(async (publicRoutes) => {
-    publicRoutes.post('/api/auth/register', {
-      config: { rateLimit: { max: 5, timeWindow: '1 minute' } }
+  server.register(async (pub) => {
+    pub.post("/api/auth/register", {
+      schema: registerSchema,
+      config: { rateLimit: { max: 5, timeWindow: "1 minute" } },
     }, registerHandler);
 
-    publicRoutes.post('/api/auth/login', {
-      config: { rateLimit: { max: 10, timeWindow: '1 minute' } }
+    pub.post("/api/auth/login", {
+      schema: loginSchema,
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
     }, loginHandler);
 
-    publicRoutes.get('/api/auth/check-domain', {
-      config: { rateLimit: { max: 30, timeWindow: '1 minute' } }
+    pub.post("/api/auth/refresh", {
+      config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+    }, refreshHandler);
+
+    pub.post("/api/auth/logout", logoutHandler);
+
+    pub.get("/api/auth/check-domain", {
+      config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
     }, checkDomainHandler);
   });
 
-  // 4. Protected Routes (Requires Auth - Mocked for now)
-  server.register(async (protectedRoutes) => {
-    protectedRoutes.post('/api/auth/mfa/generate', generateMfaHandler);
+  server.register(async (prot) => {
+    prot.post("/api/auth/mfa/generate", generateMfaHandler);
   });
 
-  server.get('/health', async () => ({ status: 'ok', service: 'auth-service', mfa: 'ready', limits: 'active' }));
+  server.get("/health", async () => ({
+    status: "ok", service: "auth-service", validation: "enabled", refresh: "enabled",
+  }));
 }
 
 buildServer().then(() => {
-  server.listen({ port: 3001, host: '0.0.0.0' }, (err, address) => {
-    if (err) {
-      server.log.error(err);
-      process.exit(1);
-    }
-    console.log('Auth service listening at ' + address);
+  const PORT = parseInt(process.env.PORT ?? "3001", 10);
+
+  async function shutdown(signal: string) {
+    server.log.info(`${signal} received — shutting down auth-service`);
+    await server.close();
+    process.exit(0);
+  }
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT",  () => shutdown("SIGINT"));
+
+  server.listen({ port: PORT, host: "0.0.0.0" }, (err, address) => {
+    if (err) { server.log.error(err); process.exit(1); }
+    server.log.info("Auth service listening at " + address);
   });
 });
