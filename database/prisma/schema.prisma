@@ -15,8 +15,10 @@ enum VerificationStatus {
 
 enum ContentStatus {
   DRAFT
+  PENDING_REVIEW
   PUBLISHED
   FLAGGED
+  REJECTED
 }
 
 enum TransactionStatus {
@@ -24,6 +26,13 @@ enum TransactionStatus {
   COMPLETED
   FAILED
   REFUNDED
+}
+
+enum KycStatus {
+  NOT_STARTED
+  PENDING_REVIEW
+  VERIFIED
+  REJECTED
 }
 
 model University {
@@ -67,9 +76,11 @@ model User {
   verificationStatus VerificationStatus @default(UNVERIFIED)
   mfaEnabled         Boolean  @default(false)
   lastLoginIp        String?
+  role               String   @default("student")
   university         University? @relation(fields: [universityId], references: [id])
   sellerProfile      SellerProfile?
   transactions       PaymentTransaction[] @relation("BuyerTransactions")
+  reviews            Review[] @relation("Reviewer")
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 }
@@ -77,7 +88,7 @@ model User {
 model SellerProfile {
   id               String   @id @default(uuid())
   userId           String   @unique
-  kycStatus        String   @default("NOT_STARTED")
+  kycStatus        KycStatus @default(NOT_STARTED)
   stripeAccountId  String?  @unique
   availableBalance Int      @default(0)
   pendingBalance   Int      @default(0)
@@ -111,6 +122,7 @@ model ContentAsset {
   seller                 SellerProfile @relation(fields: [sellerId], references: [id])
   course                 LocalCourse   @relation(fields: [localCourseId], references: [id])
   transactions           PaymentTransaction[]
+  reviews                Review[]
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 }
@@ -126,7 +138,7 @@ model PaymentTransaction {
   currency         String
   method           String
   status           TransactionStatus @default(PENDING)
-  providerChargeId String?
+  providerChargeId String?  @unique
   buyer            User          @relation("BuyerTransactions", fields: [buyerId], references: [id])
   seller           SellerProfile? @relation("SellerTransactions", fields: [sellerId], references: [id])
   content          ContentAsset? @relation(fields: [contentId], references: [id])
@@ -145,4 +157,15 @@ model SubscriptionAccess {
   cancelAtPeriodEnd      Boolean  @default(false)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
+}
+
+model Review {
+  id         String       @id @default(uuid())
+  contentId  String
+  reviewerId String
+  rating     Int
+  comment    String?
+  createdAt  DateTime     @default(now())
+  content    ContentAsset @relation(fields: [contentId], references: [id])
+  reviewer   User         @relation("Reviewer", fields: [reviewerId], references: [id])
 }

@@ -1,0 +1,11 @@
+name: Release Pending Balances
+on:
+  schedule:
+    - cron: '0 3 * * *'   # 3am UTC daily
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -X POST https://your-domain.com/api/payment/release-pending \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"

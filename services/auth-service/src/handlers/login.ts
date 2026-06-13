@@ -28,7 +28,7 @@ export async function loginHandler(request: FastifyRequest, reply: FastifyReply)
   const ip = (request.headers['x-forwarded-for'] as string)?.split(',')[0] ?? request.ip;
   await prisma.user.update({ where: { id: user.id }, data: { lastLoginIp: ip } }).catch(() => {});
 
-  const payload = { userId: user.id, email: user.email, role: 'student' };
+  const payload = { userId: user.id, email: user.email, role: user.role };
   const accessToken  = await reply.jwtSign(payload, { expiresIn: '15m' });
   const refreshToken = await reply.jwtSign({ userId: user.id }, { expiresIn: '30d' });
 
