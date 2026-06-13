@@ -4,6 +4,7 @@
     "private": true,
     "dependencies": {
         "@sendgrid/mail": "^8.1.6",
+        "bullmq": "^5.78.0",
         "fastify": "^5.8.5",
         "firebase-admin": "^14.0.0"
     },

@@ -2,11 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { contentApi, Document } from '../api-client';
 
-interface Filters {
-  search?: string;
-  university?: string;
-  docType?: string;
-}
+interface Filters { search?: string; university?: string; docType?: string; }
 
 export function useDocuments(filters: Filters = {}) {
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -22,7 +18,6 @@ export function useDocuments(filters: Filters = {}) {
       setDocuments(data);
       setFromBackend(true);
     } catch (err: any) {
-      // Backend not ready yet — caller should fall back to DEMO_DOCUMENTS
       setError(err.message);
       setFromBackend(false);
     } finally {
@@ -30,7 +25,14 @@ export function useDocuments(filters: Filters = {}) {
     }
   }, [filters.search, filters.university, filters.docType]);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  // FIXED: Debounce implementation to prevent spamming backend on every keystroke
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      fetch();
+    }, 300); // Wait 300ms after last typing event before fetching
+    
+    return () => clearTimeout(timeoutId);
+  }, [fetch]);
 
   return { documents, isLoading, error, fromBackend, refetch: fetch };
 }

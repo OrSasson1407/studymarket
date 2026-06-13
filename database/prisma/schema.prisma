@@ -7,9 +7,25 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// -----------------------------------------
-// 1. Academic Taxonomy
-// -----------------------------------------
+enum VerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+}
+
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  FLAGGED
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
 model University {
   id              String   @id @default(uuid())
   domain          String   @unique
@@ -41,9 +57,6 @@ model LocalCourse {
   documents       ContentAsset[]
 }
 
-// -----------------------------------------
-// 2. Identity & Trust
-// -----------------------------------------
 model User {
   id                 String   @id @default(uuid())
   email              String   @unique
@@ -51,10 +64,10 @@ model User {
   firstName          String
   lastName           String
   universityId       String?
-  verificationStatus String   @default("UNVERIFIED")
+  verificationStatus VerificationStatus @default(UNVERIFIED)
   mfaEnabled         Boolean  @default(false)
   lastLoginIp        String?
-  university         University?   @relation(fields: [universityId], references: [id])
+  university         University? @relation(fields: [universityId], references: [id])
   sellerProfile      SellerProfile?
   transactions       PaymentTransaction[] @relation("BuyerTransactions")
   createdAt          DateTime @default(now())
@@ -78,9 +91,6 @@ model SellerProfile {
   transactions     PaymentTransaction[] @relation("SellerTransactions")
 }
 
-// -----------------------------------------
-// 3. Content Marketplace
-// -----------------------------------------
 model ContentAsset {
   id                     String   @id @default(uuid())
   sellerId               String
@@ -88,7 +98,7 @@ model ContentAsset {
   title                  String
   description            String
   format                 String
-  status                 String   @default("DRAFT")
+  status                 ContentStatus @default(DRAFT)
   fileUrl                String
   previewUrl             String?
   pageCount              Int      @default(1)
@@ -105,9 +115,6 @@ model ContentAsset {
   updatedAt              DateTime @updatedAt
 }
 
-// -----------------------------------------
-// 4. Payments & Transactions
-// -----------------------------------------
 model PaymentTransaction {
   id               String   @id @default(uuid())
   buyerId          String
@@ -118,18 +125,15 @@ model PaymentTransaction {
   sellerCut        Int
   currency         String
   method           String
-  status           String   @default("PENDING")
+  status           TransactionStatus @default(PENDING)
   providerChargeId String?
   buyer            User          @relation("BuyerTransactions", fields: [buyerId], references: [id])
   seller           SellerProfile? @relation("SellerTransactions", fields: [sellerId], references: [id])
-  content          ContentAsset?  @relation(fields: [contentId], references: [id])
+  content          ContentAsset? @relation(fields: [contentId], references: [id])
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
 
-// -----------------------------------------
-// 5. Subscriptions
-// -----------------------------------------
 model SubscriptionAccess {
   id                     String   @id @default(uuid())
   userId                 String
